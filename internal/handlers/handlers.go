@@ -4,13 +4,14 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"sort"
 
 	"github.com/CloudyKit/jet/v6"
 	"github.com/gorilla/websocket"
 )
 
-var wsChan=make(chan WsPayload)
-var clients=make(map[WebSocketConnection]string)
+var wsChan = make(chan WsPayload)
+var clients = make(map[WebSocketConnection]string)
 
 var views = jet.NewSet(
 
@@ -40,9 +41,10 @@ type WebSocketConnection struct {
 
 // ? WsJsonResponse defines the response sent back from websocket
 type WsJsonResponse struct {
-	Action      string `json:"action"`
-	Message     string `json:"message"`
-	MessageType string `json:"message_type"`
+	Action         string   `json:"action"`
+	Message        string   `json:"message"`
+	MessageType    string   `json:"message_type"`
+	ConnectedUsers []string `json:"connected_users"`
 }
 
 type WsPayload struct {
@@ -65,10 +67,10 @@ func WsEndPoint(w http.ResponseWriter, r *http.Request) {
 
 	response.Message = `<em><small>Connected to server</small></em>`
 
-	conn:=WebSocketConnection{Conn: ws}
+	conn := WebSocketConnection{Conn: ws}
 	err = ws.WriteJSON(response)
 
-	clients[conn]=""
+	clients[conn] = ""
 
 	if err != nil {
 		log.Println(err)
@@ -77,48 +79,71 @@ func WsEndPoint(w http.ResponseWriter, r *http.Request) {
 	go ListenForWs(&conn)
 }
 
-func ListenForWs(conn *WebSocketConnection){
-	defer func(){
-		if r:=recover(); r!=nil{
-			log.Println("Error",fmt.Sprintf("%v",r))
+func ListenForWs(conn *WebSocketConnection) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Println("Error", fmt.Sprintf("%v", r))
 		}
 	}()
 
 	var payload WsPayload
 
 	for {
-		err:=conn.ReadJSON(&payload)
+		err := conn.ReadJSON(&payload)
 
-		if err!=nil{
+		if err != nil {
 
-		} else{
-			payload.Conn=*conn
+		} else {
+			payload.Conn = *conn
 			wsChan <- payload
 		}
 	}
 }
 
-func ListenToWsChannel(){
+func ListenToWsChannel() {
 	var response WsJsonResponse
 
-	for{
-		e:= <-wsChan
+	for {
+		e := <-wsChan
 
-		response.Action="Got here"
-		response.Message=fmt.Sprintf("Some message, and action was %s", e.Action)
-		broadcastToAll(response)
+		//response.Action = "Got here"
+		//response.Message = fmt.Sprintf("Some message, and action was %s", e.Action)
+		//broadcastToAll(response)
+
+		switch e.Action {
+
+		case "username":
+			//get a list of all users and send it back via broadcast
+
+			clients[e.Conn] = e.Username
+			users := getUserList()
+			response.Action = "list_users"
+			response.ConnectedUsers = users
+			broadcastToAll(response)
+		}
 	}
 }
 
-func broadcastToAll(response WsJsonResponse){
-	for client:=range clients{
-		err:=client.WriteJSON(response)
+func getUserList() []string {
+	var userList []string
 
-		if err!=nil{
+	for _, x := range clients {
+		userList = append(userList, x)
+	}
+
+	sort.Strings(userList)
+	return userList
+}
+
+func broadcastToAll(response WsJsonResponse) {
+	for client := range clients {
+		err := client.WriteJSON(response)
+
+		if err != nil {
 			log.Println("websocket err")
-			_=client.Close()
+			_ = client.Close()
 
-			delete(clients,client)
+			delete(clients, client)
 		}
 	}
 }
