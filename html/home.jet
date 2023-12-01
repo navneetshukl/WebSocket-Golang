@@ -31,6 +31,8 @@
             <div class="col-md-8">
                 <h3>Chat</h3>
 
+                <p><a href="https://github.com">Go to github</a></p>
+
                 <div class="form-group">
                     <label for="username">Username:</label>
                     <input type="text" name="username" id="username" class="form-control" autocomplete="off">
@@ -72,6 +74,12 @@
 
 <script>
     let socket = null;
+
+    window.onbeforeunload = function () {
+        let jsonData = {};
+        jsonData["action"] = "left";
+        socket.send(JSON.stringify(jsonData));
+    }
     document.addEventListener("DOMContentLoaded", function () {
         socket = new WebSocket("ws://127.0.0.1:8080/ws");
 
@@ -93,16 +101,16 @@
             // console.log(j);
 
             let data = JSON.parse(msg.data);
-            console.log("Action is",data.action);
+            console.log("Action is", data.action);
 
-            switch(data.action) {
+            switch (data.action) {
                 case "list_users":
-                    let ul=document.getElementById("online_users");
-                    while(ul.firstChild) ul.removeChild(ul.firstChild);
+                    let ul = document.getElementById("online_users");
+                    while (ul.firstChild) ul.removeChild(ul.firstChild);
 
-                    if(data.connected_users.length >0){
-                        data.connected_users.forEach(function(item){
-                            let li=document.createElement("li");
+                    if (data.connected_users.length > 0) {
+                        data.connected_users.forEach(function (item) {
+                            let li = document.createElement("li");
                             li.appendChild(document.createTextNode(item));
                             ul.appendChild(li);
                         })
